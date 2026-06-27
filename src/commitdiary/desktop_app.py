@@ -20,6 +20,23 @@ from .view_model import CommitDiaryViewModel
 
 
 PRIMARY_ACTION_LABELS = ("刷新", "选择", "生成", "复制", "打开", "设置")
+VIEW_NAMES = ("dashboard", "settings")
+SETTINGS_FIELD_LABELS = ("仓库路径", "AI 地址", "AI 模型", "API Key")
+
+COLORS = {
+    "bg": "#0F172A",
+    "surface": "#111827",
+    "surface_alt": "#1E293B",
+    "line": "#334155",
+    "text": "#F8FAFC",
+    "muted": "#94A3B8",
+    "subtle": "#CBD5E1",
+    "accent": "#22C55E",
+    "accent_dark": "#15803D",
+    "info": "#38BDF8",
+    "warning": "#F59E0B",
+    "danger": "#EF4444",
+}
 
 
 class CommitDiaryDesktopApp:
@@ -49,114 +66,308 @@ class CommitDiaryDesktopApp:
 
     def _build_window(self) -> None:
         self.root.title("CommitDiary")
-        self.root.configure(bg="#101418")
+        self.root.configure(bg=COLORS["bg"])
         self.root.attributes("-topmost", True)
         self.root.overrideredirect(True)
-        self.root.minsize(320, 170)
+        self.root.minsize(360, 260)
 
-        self.container = tk.Frame(self.root, bg="#101418", bd=1, relief="solid")
+        self.container = tk.Frame(
+            self.root,
+            bg=COLORS["bg"],
+            highlightthickness=1,
+            highlightbackground=COLORS["line"],
+            highlightcolor=COLORS["line"],
+        )
         self.container.pack(fill="both", expand=True)
 
-        self.header = tk.Frame(self.container, bg="#151b22", height=38)
-        self.header.pack(fill="x")
+        self.header = tk.Frame(self.container, bg=COLORS["surface"], height=46)
+        self.header.pack(fill="x", padx=1, pady=1)
         self.title_label = tk.Label(
             self.header,
             text="CommitDiary · -",
-            bg="#151b22",
-            fg="#f4f7fb",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
             anchor="w",
-            font=("Segoe UI", 10, "bold"),
+            font=("Segoe UI", 11, "bold"),
         )
-        self.title_label.pack(side="left", fill="x", expand=True, padx=12, pady=8)
+        self.title_label.pack(side="left", fill="x", expand=True, padx=14, pady=10)
         self.collapse_button = tk.Button(
             self.header,
             text="▾",
             width=3,
             command=self.toggle_expanded,
-            bg="#1f2933",
-            fg="#f4f7fb",
+            bg=COLORS["surface_alt"],
+            fg=COLORS["text"],
+            activebackground=COLORS["line"],
+            activeforeground=COLORS["text"],
             relief="flat",
+            bd=0,
+            font=("Segoe UI", 10, "bold"),
         )
-        self.collapse_button.pack(side="right", padx=(0, 6), pady=6)
+        self.collapse_button.pack(side="right", padx=(0, 6), pady=7)
         self.close_button = tk.Button(
             self.header,
             text="×",
             width=3,
             command=self.hide,
-            bg="#1f2933",
-            fg="#f4f7fb",
+            bg=COLORS["surface_alt"],
+            fg=COLORS["text"],
+            activebackground=COLORS["danger"],
+            activeforeground=COLORS["text"],
             relief="flat",
+            bd=0,
+            font=("Segoe UI", 10, "bold"),
         )
-        self.close_button.pack(side="right", padx=(0, 6), pady=6)
+        self.close_button.pack(side="right", padx=(0, 8), pady=7)
 
-        self.body = tk.Frame(self.container, bg="#101418")
-        self.body.pack(fill="both", expand=True, padx=12, pady=10)
-        self.metric_label = tk.Label(
-            self.body,
-            text="今日 0 commits · 0 changes",
-            bg="#101418",
-            fg="#d8dee9",
-            anchor="w",
-            font=("Segoe UI", 10),
-        )
-        self.metric_label.pack(fill="x")
-        self.latest_label = tk.Label(
-            self.body,
-            text="请选择 Git 仓库",
-            bg="#101418",
-            fg="#9fb0c3",
-            anchor="w",
-            justify="left",
-            wraplength=300,
-            font=("Segoe UI", 9),
-        )
-        self.latest_label.pack(fill="x", pady=(8, 0))
-        self.status_label = tk.Label(
-            self.body,
-            text="待选择仓库",
-            bg="#101418",
-            fg="#7dd3fc",
-            anchor="w",
-            font=("Segoe UI", 9),
-        )
-        self.status_label.pack(fill="x", pady=(8, 0))
+        self.content_frame = tk.Frame(self.container, bg=COLORS["bg"])
+        self.content_frame.pack(fill="both", expand=True, padx=12, pady=(10, 12))
+        self._render_current_view()
 
-        self.button_row = tk.Frame(self.body, bg="#101418")
-        self.button_row.pack(fill="x", pady=(10, 0))
-        self._button("刷新", self.refresh).pack(side="left", padx=(0, 5))
-        self._button("选择", self.select_repository).pack(side="left", padx=(0, 5))
-        self._button("生成", self.generate).pack(side="left", padx=(0, 5))
-        self._button("复制", self.copy_diary).pack(side="left", padx=(0, 5))
-        self._button("打开", self.open_repository).pack(side="left", padx=(0, 5))
-        self._button("设置", self.open_settings).pack(side="left")
-
-        self.detail_frame = tk.Frame(self.body, bg="#101418")
-        self.diary_text = tk.Text(
-            self.detail_frame,
-            height=12,
-            bg="#0b0f14",
-            fg="#e5edf5",
-            insertbackground="#e5edf5",
-            relief="flat",
-            wrap="word",
-            font=("Consolas", 9),
-        )
-        self.diary_text.pack(fill="both", expand=True, pady=(10, 0))
-
-    def _button(self, text: str, command) -> tk.Button:
+    def _button(self, text: str, command, parent: tk.Widget | None = None, variant: str = "secondary") -> tk.Button:
+        parent = parent or self.button_row
+        if variant == "primary":
+            bg = COLORS["accent"]
+            fg = "#052E16"
+            active_bg = "#86EFAC"
+        else:
+            bg = COLORS["surface_alt"]
+            fg = COLORS["text"]
+            active_bg = COLORS["line"]
         return tk.Button(
-            self.button_row,
+            parent,
             text=text,
             command=command,
-            bg="#243241",
-            fg="#f4f7fb",
-            activebackground="#2d4052",
-            activeforeground="#ffffff",
+            bg=bg,
+            fg=fg,
+            activebackground=active_bg,
+            activeforeground=fg,
             relief="flat",
-            padx=10,
-            pady=4,
+            bd=0,
+            padx=12,
+            pady=6,
+            font=("Segoe UI", 9, "bold" if variant == "primary" else "normal"),
+            cursor="hand2",
+        )
+
+    def _render_current_view(self) -> None:
+        for child in self.content_frame.winfo_children():
+            child.destroy()
+        if self.vm.current_view == "settings":
+            self._show_settings_view()
+        else:
+            self._show_dashboard_view()
+
+    def _show_dashboard_view(self) -> None:
+        self.collapse_button.config(
+            text="▴" if self.vm.is_expanded else "▾",
+            command=self.toggle_expanded,
+        )
+        hero = tk.Frame(self.content_frame, bg=COLORS["surface"])
+        hero.pack(fill="x")
+
+        status_color = self._status_color()
+        self.status_label = tk.Label(
+            hero,
+            text=self.vm.status_text,
+            bg=COLORS["surface"],
+            fg=status_color,
+            anchor="w",
+            font=("Segoe UI", 9, "bold"),
+        )
+        self.status_label.pack(fill="x", padx=12, pady=(10, 0))
+
+        self.latest_label = tk.Label(
+            hero,
+            text=f"最近提交：{self.vm.latest_commit_message}",
+            bg=COLORS["surface"],
+            fg=COLORS["subtle"],
+            anchor="w",
+            justify="left",
+            wraplength=460,
             font=("Segoe UI", 9),
         )
+        self.latest_label.pack(fill="x", padx=12, pady=(6, 10))
+
+        metrics = tk.Frame(self.content_frame, bg=COLORS["bg"])
+        metrics.pack(fill="x", pady=(10, 0))
+        self._metric_card(metrics, "Commits", str(self.vm.today_commit_count), COLORS["accent"]).pack(
+            side="left", fill="x", expand=True, padx=(0, 6)
+        )
+        self._metric_card(metrics, "Changes", str(self.vm.working_tree_change_count), COLORS["warning"]).pack(
+            side="left", fill="x", expand=True, padx=(0, 6)
+        )
+        self._metric_card(metrics, "Branch", self.vm.branch_name, COLORS["info"]).pack(
+            side="left", fill="x", expand=True
+        )
+
+        self.button_row = tk.Frame(self.content_frame, bg=COLORS["bg"])
+        self.button_row.pack(fill="x", pady=(12, 0))
+        self._button("刷新", self.refresh).pack(side="left", padx=(0, 6))
+        self._button("选择", self.select_repository).pack(side="left", padx=(0, 6))
+        self._button("生成", self.generate, variant="primary").pack(side="left", padx=(0, 6))
+        self._button("复制", self.copy_diary).pack(side="left", padx=(0, 6))
+        self._button("打开", self.open_repository).pack(side="left", padx=(0, 6))
+        self._button("设置", self.open_settings).pack(side="left")
+
+        if self.vm.is_expanded:
+            self.detail_frame = tk.Frame(
+                self.content_frame,
+                bg=COLORS["surface"],
+                highlightthickness=1,
+                highlightbackground=COLORS["line"],
+            )
+            self.detail_frame.pack(fill="both", expand=True, pady=(12, 0))
+            tk.Label(
+                self.detail_frame,
+                text="开发日记预览",
+                bg=COLORS["surface"],
+                fg=COLORS["text"],
+                anchor="w",
+                font=("Segoe UI", 9, "bold"),
+            ).pack(fill="x", padx=10, pady=(8, 0))
+            self.diary_text = tk.Text(
+                self.detail_frame,
+                height=12,
+                bg="#020617",
+                fg=COLORS["text"],
+                insertbackground=COLORS["text"],
+                relief="flat",
+                wrap="word",
+                font=("Consolas", 9),
+                bd=0,
+                padx=10,
+                pady=8,
+            )
+            self.diary_text.pack(fill="both", expand=True, padx=10, pady=(8, 10))
+            self.diary_text.insert("1.0", self.vm.diary_markdown)
+
+    def _show_settings_view(self) -> None:
+        self.collapse_button.config(text="←", command=self.show_dashboard)
+        self._settings_repo_var = tk.StringVar(value=self.vm.settings.repository_path)
+        self._settings_enabled_var = tk.BooleanVar(value=self.vm.settings.ai_enabled)
+        self._settings_base_url_var = tk.StringVar(value=self.vm.settings.ai_base_url)
+        self._settings_model_var = tk.StringVar(value=self.vm.settings.ai_model)
+        self._settings_api_key_var = tk.StringVar(value=self.vm.settings.ai_api_key)
+
+        panel = tk.Frame(
+            self.content_frame,
+            bg=COLORS["surface"],
+            highlightthickness=1,
+            highlightbackground=COLORS["line"],
+        )
+        panel.pack(fill="both", expand=True)
+        tk.Label(
+            panel,
+            text="设置",
+            bg=COLORS["surface"],
+            fg=COLORS["text"],
+            anchor="w",
+            font=("Segoe UI", 12, "bold"),
+        ).pack(fill="x", padx=12, pady=(12, 2))
+        tk.Label(
+            panel,
+            text="仓库和 AI 润色都在当前窗口内完成",
+            bg=COLORS["surface"],
+            fg=COLORS["muted"],
+            anchor="w",
+            font=("Segoe UI", 9),
+        ).pack(fill="x", padx=12, pady=(0, 10))
+
+        self._setting_entry(panel, "仓库路径", self._settings_repo_var, browse=True)
+        self._setting_entry(panel, "AI 地址", self._settings_base_url_var)
+        self._setting_entry(panel, "AI 模型", self._settings_model_var)
+        self._setting_entry(panel, "API Key", self._settings_api_key_var, show="*")
+
+        check = tk.Checkbutton(
+            panel,
+            text="启用 AI 增强",
+            variable=self._settings_enabled_var,
+            bg=COLORS["surface"],
+            fg=COLORS["subtle"],
+            selectcolor=COLORS["bg"],
+            activebackground=COLORS["surface"],
+            activeforeground=COLORS["text"],
+            font=("Segoe UI", 9),
+        )
+        check.pack(anchor="w", padx=12, pady=(4, 8))
+
+        actions = tk.Frame(panel, bg=COLORS["surface"])
+        actions.pack(fill="x", padx=12, pady=(2, 12))
+        self._button("保存设置", self._save_settings_from_panel, parent=actions, variant="primary").pack(
+            side="right", padx=(6, 0)
+        )
+        self._button("返回", self.show_dashboard, parent=actions).pack(side="right")
+
+    def _metric_card(self, parent: tk.Widget, label: str, value: str, accent: str) -> tk.Frame:
+        card = tk.Frame(
+            parent,
+            bg=COLORS["surface_alt"],
+            highlightthickness=1,
+            highlightbackground=COLORS["line"],
+        )
+        tk.Label(
+            card,
+            text=label,
+            bg=COLORS["surface_alt"],
+            fg=COLORS["muted"],
+            anchor="w",
+            font=("Segoe UI", 8),
+        ).pack(fill="x", padx=9, pady=(7, 0))
+        tk.Label(
+            card,
+            text=value,
+            bg=COLORS["surface_alt"],
+            fg=accent,
+            anchor="w",
+            font=("Segoe UI", 12, "bold"),
+        ).pack(fill="x", padx=9, pady=(1, 7))
+        return card
+
+    def _setting_entry(
+        self,
+        parent: tk.Widget,
+        label: str,
+        variable: tk.StringVar,
+        show: str | None = None,
+        browse: bool = False,
+    ) -> None:
+        row = tk.Frame(parent, bg=COLORS["surface"])
+        row.pack(fill="x", padx=12, pady=5)
+        tk.Label(
+            row,
+            text=label,
+            bg=COLORS["surface"],
+            fg=COLORS["subtle"],
+            width=9,
+            anchor="w",
+            font=("Segoe UI", 9),
+        ).pack(side="left")
+        entry = tk.Entry(
+            row,
+            textvariable=variable,
+            show=show,
+            bg="#020617",
+            fg=COLORS["text"],
+            insertbackground=COLORS["text"],
+            relief="flat",
+            bd=0,
+            font=("Segoe UI", 9),
+        )
+        entry.pack(side="left", fill="x", expand=True, ipady=6)
+        if browse:
+            self._button("浏览", lambda: self._browse_repository(variable), parent=row).pack(
+                side="left", padx=(8, 0)
+            )
+
+    def _status_color(self) -> str:
+        if "失败" in self.vm.status_text:
+            return COLORS["danger"]
+        if "生成" in self.vm.status_text or "刷新" in self.vm.status_text or "保存" in self.vm.status_text:
+            return COLORS["accent"]
+        if "选择" in self.vm.status_text:
+            return COLORS["warning"]
+        return COLORS["info"]
 
     def _bind_events(self) -> None:
         self.header.bind("<ButtonPress-1>", self._start_drag)
@@ -167,8 +378,10 @@ class CommitDiaryDesktopApp:
 
     def _restore_geometry(self) -> None:
         settings = self.vm.settings
+        width = max(settings.window_width, 380)
+        height = max(settings.window_height, 300)
         self.root.geometry(
-            f"{settings.window_width}x{settings.window_height}+{settings.window_x}+{settings.window_y}"
+            f"{width}x{height}+{settings.window_x}+{settings.window_y}"
         )
 
     def _start_drag(self, event) -> None:
@@ -184,7 +397,8 @@ class CommitDiaryDesktopApp:
         self._run_background(self._refresh_repository)
 
     def generate(self) -> None:
-        self.status_label.config(text="生成中...")
+        self.vm.status_text = "生成中..."
+        self._refresh_labels()
         self._run_background(self._generate_diary)
 
     def copy_diary(self) -> None:
@@ -200,12 +414,14 @@ class CommitDiaryDesktopApp:
 
     def toggle_expanded(self) -> None:
         self.vm.toggle_expanded()
-        self._sync_detail_visibility(resize=True)
+        self._refresh_labels()
+        self._resize_for_current_view()
         self._save_position()
 
     def select_repository(self) -> None:
         path = filedialog.askdirectory(title="选择 Git 仓库")
         if path:
+            self.vm.show_dashboard()
             self._run_background(lambda: self._refresh_repository(path))
 
     def open_repository(self) -> None:
@@ -222,80 +438,38 @@ class CommitDiaryDesktopApp:
         self._refresh_labels()
 
     def open_settings(self) -> None:
-        settings = self.vm.settings
-        dialog = tk.Toplevel(self.root)
-        dialog.title("CommitDiary 设置")
-        dialog.configure(bg="#101418")
-        dialog.resizable(False, False)
-        dialog.attributes("-topmost", True)
-        repo_var = tk.StringVar(value=settings.repository_path)
-        enabled_var = tk.BooleanVar(value=settings.ai_enabled)
-        base_url_var = tk.StringVar(value=settings.ai_base_url)
-        model_var = tk.StringVar(value=settings.ai_model)
-        api_key_var = tk.StringVar(value=settings.ai_api_key)
-
-        def entry_row(label: str, variable: tk.StringVar, show: str | None = None) -> None:
-            frame = tk.Frame(dialog, bg="#101418")
-            frame.pack(fill="x", padx=14, pady=6)
-            tk.Label(frame, text=label, bg="#101418", fg="#d8dee9", width=10, anchor="w").pack(side="left")
-            tk.Entry(frame, textvariable=variable, width=42, show=show).pack(side="left", fill="x", expand=True)
-
-        repo_frame = tk.Frame(dialog, bg="#101418")
-        repo_frame.pack(fill="x", padx=14, pady=6)
-        tk.Label(repo_frame, text="仓库路径", bg="#101418", fg="#d8dee9", width=10, anchor="w").pack(side="left")
-        tk.Entry(repo_frame, textvariable=repo_var, width=34).pack(side="left", fill="x", expand=True)
-        tk.Button(
-            repo_frame,
-            text="浏览",
-            command=lambda: self._browse_repository(repo_var),
-            bg="#243241",
-            fg="#f4f7fb",
-            relief="flat",
-        ).pack(side="left", padx=(6, 0))
-        entry_row("AI 地址", base_url_var)
-        entry_row("AI 模型", model_var)
-        entry_row("API Key", api_key_var, show="*")
-        check = tk.Checkbutton(
-            dialog,
-            text="启用 AI 增强",
-            variable=enabled_var,
-            bg="#101418",
-            fg="#d8dee9",
-            selectcolor="#101418",
-            activebackground="#101418",
-            activeforeground="#ffffff",
-        )
-        check.pack(anchor="w", padx=14, pady=6)
-
-        button_row = tk.Frame(dialog, bg="#101418")
-        button_row.pack(fill="x", padx=14, pady=12)
-
-        def save() -> None:
-            self.vm.update_settings(
-                replace(
-                    self.vm.settings,
-                    repository_path=repo_var.get().strip(),
-                    ai_enabled=enabled_var.get(),
-                    ai_base_url=base_url_var.get().strip() or "https://api.openai.com/v1",
-                    ai_model=model_var.get().strip() or "gpt-4.1-mini",
-                    ai_api_key=api_key_var.get().strip(),
-                )
-            )
-            self.vm.status_text = "设置已保存"
-            self._refresh_labels()
-            dialog.destroy()
-
-        tk.Button(button_row, text="保存", command=save, bg="#243241", fg="#f4f7fb", relief="flat").pack(
-            side="right", padx=(6, 0)
-        )
-        tk.Button(button_row, text="取消", command=dialog.destroy, bg="#1f2933", fg="#f4f7fb", relief="flat").pack(
-            side="right"
-        )
+        self.vm.show_settings()
+        self._refresh_labels()
+        self._resize_for_current_view()
 
     def _browse_repository(self, target: tk.StringVar) -> None:
         path = filedialog.askdirectory(title="选择 Git 仓库")
         if path:
             target.set(path)
+
+    def show_dashboard(self) -> None:
+        self.vm.show_dashboard()
+        self._refresh_labels()
+        self._resize_for_current_view()
+
+    def _save_settings_from_panel(self) -> None:
+        repo_path = self._settings_repo_var.get().strip()
+        self.vm.update_settings(
+            replace(
+                self.vm.settings,
+                repository_path=repo_path,
+                ai_enabled=self._settings_enabled_var.get(),
+                ai_base_url=self._settings_base_url_var.get().strip() or "https://api.openai.com/v1",
+                ai_model=self._settings_model_var.get().strip() or "gpt-4.1-mini",
+                ai_api_key=self._settings_api_key_var.get().strip(),
+            )
+        )
+        self.vm.status_text = "设置已保存"
+        self.vm.show_dashboard()
+        self._refresh_labels()
+        self._resize_for_current_view()
+        if repo_path:
+            self._run_background(lambda: self._refresh_repository(repo_path))
 
     def show(self) -> None:
         self.root.deiconify()
@@ -322,30 +496,25 @@ class CommitDiaryDesktopApp:
 
     def _show_generated_diary(self) -> None:
         self._refresh_labels()
-        self._sync_detail_visibility(resize=True)
+        self._resize_for_current_view()
 
     def _refresh_labels(self) -> None:
         self.title_label.config(text=f"{self.vm.repository_name} · {self.vm.branch_name}")
-        self.metric_label.config(
-            text=f"今日 {self.vm.today_commit_count} commits · {self.vm.working_tree_change_count} changes"
-        )
-        self.latest_label.config(text=f"最近提交：{self.vm.latest_commit_message}")
-        self.status_label.config(text=self.vm.status_text)
-        self.diary_text.delete("1.0", tk.END)
-        self.diary_text.insert("1.0", self.vm.diary_markdown)
-        self._sync_detail_visibility(resize=False)
+        self._render_current_view()
 
     def _sync_detail_visibility(self, resize: bool) -> None:
-        if self.vm.is_expanded:
-            self.detail_frame.pack(fill="both", expand=True)
-            self.collapse_button.config(text="▴")
-            if resize:
-                self.root.geometry(f"520x560+{self.root.winfo_x()}+{self.root.winfo_y()}")
+        self._refresh_labels()
+        if resize:
+            self._resize_for_current_view()
+
+    def _resize_for_current_view(self) -> None:
+        if self.vm.current_view == "settings":
+            width, height = 460, 440
+        elif self.vm.is_expanded:
+            width, height = 560, 600
         else:
-            self.detail_frame.pack_forget()
-            self.collapse_button.config(text="▾")
-            if resize:
-                self.root.geometry(f"340x220+{self.root.winfo_x()}+{self.root.winfo_y()}")
+            width, height = 380, 300
+        self.root.geometry(f"{width}x{height}+{self.root.winfo_x()}+{self.root.winfo_y()}")
 
     def _run_background(self, target) -> None:
         thread = threading.Thread(target=target, daemon=True)

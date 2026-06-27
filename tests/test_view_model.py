@@ -74,6 +74,21 @@ class CommitDiaryViewModelTests(unittest.TestCase):
         self.assertEqual("已生成本地日记", view_model.status_text)
         self.assertTrue(view_model.is_expanded)
 
+    def test_settings_view_stays_inside_main_window_flow(self):
+        view_model = CommitDiaryViewModel(
+            settings=AppSettings(repository_path=r"D:\Repo"),
+            reader=FakeReader(_snapshot()),
+            generator=DiaryGenerator(),
+            history_store=FakeHistoryStore(),
+            settings_store=FakeSettingsStore(),
+        )
+
+        view_model.show_settings()
+        self.assertEqual("settings", view_model.current_view)
+
+        view_model.show_dashboard()
+        self.assertEqual("dashboard", view_model.current_view)
+
 
 def _snapshot():
     return GitSnapshot(

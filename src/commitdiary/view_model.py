@@ -39,6 +39,7 @@ class CommitDiaryViewModel:
         self.diary_markdown = ""
         self.copy_text = ""
         self.is_expanded = False
+        self.current_view = "dashboard"
 
     def refresh(self, repository_path: str | None = None) -> None:
         path = repository_path or self.settings.repository_path
@@ -96,6 +97,7 @@ class CommitDiaryViewModel:
                 copy_text=copy_text,
             )
         )
+        self.current_view = "dashboard"
         self.is_expanded = True
 
     def update_window_position(self, x: int, y: int, width: int, height: int) -> None:
@@ -117,3 +119,10 @@ class CommitDiaryViewModel:
 
     def set_expanded(self, value: bool) -> None:
         self.is_expanded = value
+
+    def show_settings(self) -> None:
+        self.current_view = "settings"
+        self.is_expanded = False
+
+    def show_dashboard(self) -> None:
+        self.current_view = "dashboard"
