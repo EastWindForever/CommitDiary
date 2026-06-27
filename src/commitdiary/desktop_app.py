@@ -336,12 +336,16 @@ def main(argv: list[str] | None = None) -> None:
         smoke()
         print("desktop-smoke-ok")
         return
+    if "--tray-smoke" in argv:
+        smoke(enable_tray=True)
+        print("tray-smoke-ok")
+        return
     root = tk.Tk()
     app = CommitDiaryDesktopApp(root, build_view_model())
     app.run()
 
 
-def smoke() -> None:
+def smoke(enable_tray: bool = False) -> None:
     with tempfile.TemporaryDirectory() as temp_dir:
         data_dir = Path(temp_dir)
         settings_store = JsonSettingsStore(data_dir / "settings.json")
@@ -355,9 +359,9 @@ def smoke() -> None:
         )
         root = tk.Tk()
         root.withdraw()
-        app = CommitDiaryDesktopApp(root, view_model, enable_tray=False)
-        root.update_idletasks()
-        app.exit_app()
+        app = CommitDiaryDesktopApp(root, view_model, enable_tray=enable_tray)
+        root.after(1000, app.exit_app)
+        root.mainloop()
 
 
 def open_path(path: str) -> None:

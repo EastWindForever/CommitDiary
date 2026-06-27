@@ -6,6 +6,23 @@ from ctypes import wintypes
 from typing import Callable
 
 
+def configure_window_proc_api(user32) -> None:
+    user32.CallWindowProcW.argtypes = [
+        ctypes.c_void_p,
+        wintypes.HWND,
+        wintypes.UINT,
+        wintypes.WPARAM,
+        wintypes.LPARAM,
+    ]
+    user32.CallWindowProcW.restype = wintypes.LPARAM
+    if hasattr(user32, "SetWindowLongPtrW"):
+        user32.SetWindowLongPtrW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
+        user32.SetWindowLongPtrW.restype = ctypes.c_void_p
+    if hasattr(user32, "SetWindowLongW"):
+        user32.SetWindowLongW.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
+        user32.SetWindowLongW.restype = ctypes.c_void_p
+
+
 class WindowsTrayIcon:
     WM_USER = 0x0400
     WM_LBUTTONUP = 0x0202
@@ -44,6 +61,7 @@ class WindowsTrayIcon:
         self._callback_message = self.WM_USER + 25
         self._user32 = ctypes.windll.user32
         self._shell32 = ctypes.windll.shell32
+        configure_window_proc_api(self._user32)
         self._hwnd = root.winfo_id()
         self._menu = tk.Menu(root, tearoff=0)
         self._menu.add_command(label="显示窗口", command=on_show)
@@ -76,7 +94,7 @@ class WindowsTrayIcon:
             elif lparam == self.WM_RBUTTONUP:
                 self._root.after(0, self._show_menu)
             return 0
-        return self._user32.CallWindowProcW(self._old_wndproc, hwnd, msg, wparam, lparam)
+        return self._user32.CallWindowProcW(ctypes.c_void_p(self._old_wndproc), hwnd, msg, wparam, lparam)
 
     def _show_menu(self) -> None:
         point = wintypes.POINT()
@@ -100,6 +118,4 @@ class WindowsTrayIcon:
             set_window_long = self._user32.SetWindowLongPtrW
         else:
             set_window_long = self._user32.SetWindowLongW
-        set_window_long.argtypes = [wintypes.HWND, ctypes.c_int, ctypes.c_void_p]
-        set_window_long.restype = ctypes.c_void_p
         return set_window_long(hwnd, self.GWL_WNDPROC, proc)
