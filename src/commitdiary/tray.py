@@ -80,9 +80,13 @@ class WindowsTrayIcon:
         self._new_wndproc = self._wndproc_type(self._wndproc)
         self._old_wndproc = self._set_wndproc(self._hwnd, self._new_wndproc)
         self._icon_data = self._make_icon_data()
+        self._disposed = False
         self._shell32.Shell_NotifyIconW(self.NIM_ADD, ctypes.byref(self._icon_data))
 
     def dispose(self) -> None:
+        if self._disposed:
+            return
+        self._disposed = True
         self._shell32.Shell_NotifyIconW(self.NIM_DELETE, ctypes.byref(self._icon_data))
         if self._old_wndproc:
             self._set_wndproc(self._hwnd, self._old_wndproc)

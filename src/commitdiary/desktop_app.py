@@ -22,20 +22,26 @@ from .view_model import CommitDiaryViewModel
 PRIMARY_ACTION_LABELS = ("刷新", "选择", "生成", "复制", "打开", "设置")
 VIEW_NAMES = ("dashboard", "settings")
 SETTINGS_FIELD_LABELS = ("仓库路径", "AI 地址", "AI 模型", "API Key")
+MINI_METRIC_LABELS = ("C", "Δ", "BR")
+MINI_ACTION_LABELS = ("↻", "+", "▶", "⧉", "⌂", "⚙")
+COMPACT_WINDOW_SIZE = (300, 148)
+EXPANDED_WINDOW_SIZE = (500, 520)
+SETTINGS_WINDOW_SIZE = (420, 390)
 
 COLORS = {
-    "bg": "#0F172A",
-    "surface": "#111827",
-    "surface_alt": "#1E293B",
-    "line": "#334155",
-    "text": "#F8FAFC",
-    "muted": "#94A3B8",
-    "subtle": "#CBD5E1",
-    "accent": "#22C55E",
-    "accent_dark": "#15803D",
-    "info": "#38BDF8",
-    "warning": "#F59E0B",
-    "danger": "#EF4444",
+    "bg": "#101114",
+    "surface": "#17191D",
+    "surface_alt": "#20242B",
+    "line": "#2B3038",
+    "text": "#F7F2EA",
+    "muted": "#A7ADB8",
+    "subtle": "#D5D0C6",
+    "accent": "#8BFFB0",
+    "accent_dark": "#225B3A",
+    "info": "#7DD3FC",
+    "warning": "#FBBF24",
+    "danger": "#FB7185",
+    "violet": "#C084FC",
 }
 
 
@@ -45,6 +51,7 @@ class CommitDiaryDesktopApp:
         self.vm = view_model
         self._drag_start: tuple[int, int] | None = None
         self._tray: WindowsTrayIcon | None = None
+        self._is_exiting = False
         self._build_window()
         self._bind_events()
         self._restore_geometry()
@@ -69,7 +76,7 @@ class CommitDiaryDesktopApp:
         self.root.configure(bg=COLORS["bg"])
         self.root.attributes("-topmost", True)
         self.root.overrideredirect(True)
-        self.root.minsize(360, 260)
+        self.root.minsize(*COMPACT_WINDOW_SIZE)
 
         self.container = tk.Frame(
             self.root,
@@ -80,48 +87,60 @@ class CommitDiaryDesktopApp:
         )
         self.container.pack(fill="both", expand=True)
 
-        self.header = tk.Frame(self.container, bg=COLORS["surface"], height=46)
-        self.header.pack(fill="x", padx=1, pady=1)
+        self.header = tk.Frame(self.container, bg=COLORS["bg"], height=34)
+        self.header.pack(fill="x", padx=8, pady=(7, 2))
+        self.mark_label = tk.Label(
+            self.header,
+            text="∴",
+            bg=COLORS["accent"],
+            fg="#102016",
+            width=2,
+            anchor="center",
+            font=("Segoe UI", 10, "bold"),
+        )
+        self.mark_label.pack(side="left", padx=(0, 7), pady=2)
         self.title_label = tk.Label(
             self.header,
-            text="CommitDiary · -",
-            bg=COLORS["surface"],
+            text="选择仓库",
+            bg=COLORS["bg"],
             fg=COLORS["text"],
             anchor="w",
-            font=("Segoe UI", 11, "bold"),
+            font=("Segoe UI", 9, "bold"),
         )
-        self.title_label.pack(side="left", fill="x", expand=True, padx=14, pady=10)
+        self.title_label.pack(side="left", fill="x", expand=True, pady=5)
         self.collapse_button = tk.Button(
             self.header,
             text="▾",
             width=3,
             command=self.toggle_expanded,
-            bg=COLORS["surface_alt"],
+            bg=COLORS["bg"],
             fg=COLORS["text"],
-            activebackground=COLORS["line"],
+            activebackground=COLORS["surface_alt"],
             activeforeground=COLORS["text"],
             relief="flat",
             bd=0,
-            font=("Segoe UI", 10, "bold"),
+            font=("Segoe UI", 9, "bold"),
+            cursor="hand2",
         )
-        self.collapse_button.pack(side="right", padx=(0, 6), pady=7)
+        self.collapse_button.pack(side="right", padx=(0, 3), pady=2)
         self.close_button = tk.Button(
             self.header,
             text="×",
             width=3,
-            command=self.hide,
-            bg=COLORS["surface_alt"],
+            command=self.exit_app,
+            bg=COLORS["bg"],
             fg=COLORS["text"],
             activebackground=COLORS["danger"],
             activeforeground=COLORS["text"],
             relief="flat",
             bd=0,
-            font=("Segoe UI", 10, "bold"),
+            font=("Segoe UI", 9, "bold"),
+            cursor="hand2",
         )
-        self.close_button.pack(side="right", padx=(0, 8), pady=7)
+        self.close_button.pack(side="right", pady=2)
 
         self.content_frame = tk.Frame(self.container, bg=COLORS["bg"])
-        self.content_frame.pack(fill="both", expand=True, padx=12, pady=(10, 12))
+        self.content_frame.pack(fill="both", expand=True, padx=8, pady=(0, 8))
         self._render_current_view()
 
     def _button(self, text: str, command, parent: tk.Widget | None = None, variant: str = "secondary") -> tk.Button:
@@ -144,9 +163,10 @@ class CommitDiaryDesktopApp:
             activeforeground=fg,
             relief="flat",
             bd=0,
-            padx=12,
-            pady=6,
-            font=("Segoe UI", 9, "bold" if variant == "primary" else "normal"),
+            padx=8,
+            pady=3,
+            width=3 if text in MINI_ACTION_LABELS else 8,
+            font=("Segoe UI", 8, "bold" if variant == "primary" else "normal"),
             cursor="hand2",
         )
 
@@ -163,52 +183,50 @@ class CommitDiaryDesktopApp:
             text="▴" if self.vm.is_expanded else "▾",
             command=self.toggle_expanded,
         )
-        hero = tk.Frame(self.content_frame, bg=COLORS["surface"])
-        hero.pack(fill="x")
-
         status_color = self._status_color()
-        self.status_label = tk.Label(
-            hero,
-            text=self.vm.status_text,
+        summary = tk.Frame(self.content_frame, bg=COLORS["surface"])
+        summary.pack(fill="x")
+
+        top_line = tk.Frame(summary, bg=COLORS["surface"])
+        top_line.pack(fill="x", padx=8, pady=(7, 2))
+        tk.Label(
+            top_line,
+            text="●",
             bg=COLORS["surface"],
             fg=status_color,
             anchor="w",
-            font=("Segoe UI", 9, "bold"),
-        )
-        self.status_label.pack(fill="x", padx=12, pady=(10, 0))
-
-        self.latest_label = tk.Label(
-            hero,
-            text=f"最近提交：{self.vm.latest_commit_message}",
+            font=("Segoe UI", 7, "bold"),
+        ).pack(side="left", padx=(0, 5))
+        self.status_label = tk.Label(
+            top_line,
+            text=self.vm.status_text,
             bg=COLORS["surface"],
             fg=COLORS["subtle"],
             anchor="w",
-            justify="left",
-            wraplength=460,
-            font=("Segoe UI", 9),
+            font=("Segoe UI", 8),
         )
-        self.latest_label.pack(fill="x", padx=12, pady=(6, 10))
+        self.status_label.pack(side="left", fill="x", expand=True)
 
-        metrics = tk.Frame(self.content_frame, bg=COLORS["bg"])
-        metrics.pack(fill="x", pady=(10, 0))
-        self._metric_card(metrics, "Commits", str(self.vm.today_commit_count), COLORS["accent"]).pack(
-            side="left", fill="x", expand=True, padx=(0, 6)
+        metrics = tk.Frame(summary, bg=COLORS["surface"])
+        metrics.pack(fill="x", padx=8, pady=(0, 7))
+        self._metric_chip(metrics, MINI_METRIC_LABELS[0], str(self.vm.today_commit_count), COLORS["accent"]).pack(
+            side="left", padx=(0, 5)
         )
-        self._metric_card(metrics, "Changes", str(self.vm.working_tree_change_count), COLORS["warning"]).pack(
-            side="left", fill="x", expand=True, padx=(0, 6)
+        self._metric_chip(metrics, MINI_METRIC_LABELS[1], str(self.vm.working_tree_change_count), COLORS["warning"]).pack(
+            side="left", padx=(0, 5)
         )
-        self._metric_card(metrics, "Branch", self.vm.branch_name, COLORS["info"]).pack(
-            side="left", fill="x", expand=True
+        self._metric_chip(metrics, MINI_METRIC_LABELS[2], self.vm.branch_name, COLORS["info"]).pack(
+            side="left"
         )
 
         self.button_row = tk.Frame(self.content_frame, bg=COLORS["bg"])
-        self.button_row.pack(fill="x", pady=(12, 0))
-        self._button("刷新", self.refresh).pack(side="left", padx=(0, 6))
-        self._button("选择", self.select_repository).pack(side="left", padx=(0, 6))
-        self._button("生成", self.generate, variant="primary").pack(side="left", padx=(0, 6))
-        self._button("复制", self.copy_diary).pack(side="left", padx=(0, 6))
-        self._button("打开", self.open_repository).pack(side="left", padx=(0, 6))
-        self._button("设置", self.open_settings).pack(side="left")
+        self.button_row.pack(fill="x", pady=(7, 0))
+        self._button(MINI_ACTION_LABELS[0], self.refresh).pack(side="left", padx=(0, 5))
+        self._button(MINI_ACTION_LABELS[1], self.select_repository).pack(side="left", padx=(0, 5))
+        self._button(MINI_ACTION_LABELS[2], self.generate, variant="primary").pack(side="left", padx=(0, 5))
+        self._button(MINI_ACTION_LABELS[3], self.copy_diary).pack(side="left", padx=(0, 5))
+        self._button(MINI_ACTION_LABELS[4], self.open_repository).pack(side="left", padx=(0, 5))
+        self._button(MINI_ACTION_LABELS[5], self.open_settings).pack(side="left")
 
         if self.vm.is_expanded:
             self.detail_frame = tk.Frame(
@@ -220,7 +238,17 @@ class CommitDiaryDesktopApp:
             self.detail_frame.pack(fill="both", expand=True, pady=(12, 0))
             tk.Label(
                 self.detail_frame,
-                text="开发日记预览",
+                text=f"最近提交：{self.vm.latest_commit_message}",
+                bg=COLORS["surface"],
+                fg=COLORS["subtle"],
+                anchor="w",
+                justify="left",
+                wraplength=460,
+                font=("Segoe UI", 8),
+            ).pack(fill="x", padx=10, pady=(8, 0))
+            tk.Label(
+                self.detail_frame,
+                text="开发日记",
                 bg=COLORS["surface"],
                 fg=COLORS["text"],
                 anchor="w",
@@ -324,6 +352,26 @@ class CommitDiaryDesktopApp:
         ).pack(fill="x", padx=9, pady=(1, 7))
         return card
 
+    def _metric_chip(self, parent: tk.Widget, label: str, value: str, accent: str) -> tk.Frame:
+        chip = tk.Frame(parent, bg=COLORS["surface_alt"])
+        tk.Label(
+            chip,
+            text=label,
+            bg=COLORS["surface_alt"],
+            fg=accent,
+            anchor="center",
+            font=("Segoe UI", 7, "bold"),
+        ).pack(side="left", padx=(6, 3), pady=3)
+        tk.Label(
+            chip,
+            text=value,
+            bg=COLORS["surface_alt"],
+            fg=COLORS["text"],
+            anchor="center",
+            font=("Segoe UI", 8, "bold"),
+        ).pack(side="left", padx=(0, 6), pady=3)
+        return chip
+
     def _setting_entry(
         self,
         parent: tk.Widget,
@@ -372,14 +420,16 @@ class CommitDiaryDesktopApp:
     def _bind_events(self) -> None:
         self.header.bind("<ButtonPress-1>", self._start_drag)
         self.header.bind("<B1-Motion>", self._drag)
+        self.mark_label.bind("<ButtonPress-1>", self._start_drag)
+        self.mark_label.bind("<B1-Motion>", self._drag)
         self.title_label.bind("<ButtonPress-1>", self._start_drag)
         self.title_label.bind("<B1-Motion>", self._drag)
-        self.root.protocol("WM_DELETE_WINDOW", self.hide)
+        self.root.protocol("WM_DELETE_WINDOW", self.exit_app)
 
     def _restore_geometry(self) -> None:
         settings = self.vm.settings
-        width = max(settings.window_width, 380)
-        height = max(settings.window_height, 300)
+        width = max(settings.window_width, COMPACT_WINDOW_SIZE[0])
+        height = max(settings.window_height, COMPACT_WINDOW_SIZE[1])
         self.root.geometry(
             f"{width}x{height}+{settings.window_x}+{settings.window_y}"
         )
@@ -481,9 +531,14 @@ class CommitDiaryDesktopApp:
         self.root.withdraw()
 
     def exit_app(self) -> None:
+        if getattr(self, "_is_exiting", False):
+            return
+        self._is_exiting = True
         self._save_position()
-        if self._tray:
-            self._tray.dispose()
+        tray = self._tray
+        self._tray = None
+        if tray:
+            tray.dispose()
         self.root.destroy()
 
     def _refresh_repository(self, path: str | None = None) -> None:
@@ -499,7 +554,7 @@ class CommitDiaryDesktopApp:
         self._resize_for_current_view()
 
     def _refresh_labels(self) -> None:
-        self.title_label.config(text=f"{self.vm.repository_name} · {self.vm.branch_name}")
+        self.title_label.config(text=self._title_text())
         self._render_current_view()
 
     def _sync_detail_visibility(self, resize: bool) -> None:
@@ -509,12 +564,17 @@ class CommitDiaryDesktopApp:
 
     def _resize_for_current_view(self) -> None:
         if self.vm.current_view == "settings":
-            width, height = 460, 440
+            width, height = SETTINGS_WINDOW_SIZE
         elif self.vm.is_expanded:
-            width, height = 560, 600
+            width, height = EXPANDED_WINDOW_SIZE
         else:
-            width, height = 380, 300
+            width, height = COMPACT_WINDOW_SIZE
         self.root.geometry(f"{width}x{height}+{self.root.winfo_x()}+{self.root.winfo_y()}")
+
+    def _title_text(self) -> str:
+        if self.vm.settings.repository_path:
+            return f"{self.vm.repository_name} · {self.vm.branch_name}"
+        return "选择仓库"
 
     def _run_background(self, target) -> None:
         thread = threading.Thread(target=target, daemon=True)
