@@ -19,6 +19,9 @@ from .tray import WindowsTrayIcon
 from .view_model import CommitDiaryViewModel
 
 
+PRIMARY_ACTION_LABELS = ("刷新", "选择", "生成", "复制", "打开", "设置")
+
+
 class CommitDiaryDesktopApp:
     def __init__(self, root: tk.Tk, view_model: CommitDiaryViewModel, enable_tray: bool = True):
         self.root = root
@@ -120,10 +123,11 @@ class CommitDiaryDesktopApp:
 
         self.button_row = tk.Frame(self.body, bg="#101418")
         self.button_row.pack(fill="x", pady=(10, 0))
-        self._button("刷新", self.refresh).pack(side="left", padx=(0, 6))
-        self._button("生成", self.generate).pack(side="left", padx=(0, 6))
-        self._button("复制", self.copy_diary).pack(side="left", padx=(0, 6))
-        self._button("打开", self.open_repository).pack(side="left", padx=(0, 6))
+        self._button("刷新", self.refresh).pack(side="left", padx=(0, 5))
+        self._button("选择", self.select_repository).pack(side="left", padx=(0, 5))
+        self._button("生成", self.generate).pack(side="left", padx=(0, 5))
+        self._button("复制", self.copy_diary).pack(side="left", padx=(0, 5))
+        self._button("打开", self.open_repository).pack(side="left", padx=(0, 5))
         self._button("设置", self.open_settings).pack(side="left")
 
         self.detail_frame = tk.Frame(self.body, bg="#101418")
@@ -243,7 +247,18 @@ class CommitDiaryDesktopApp:
             tk.Label(frame, text=label, bg="#101418", fg="#d8dee9", width=10, anchor="w").pack(side="left")
             tk.Entry(frame, textvariable=variable, width=42, show=show).pack(side="left", fill="x", expand=True)
 
-        entry_row("仓库路径", repo_var)
+        repo_frame = tk.Frame(dialog, bg="#101418")
+        repo_frame.pack(fill="x", padx=14, pady=6)
+        tk.Label(repo_frame, text="仓库路径", bg="#101418", fg="#d8dee9", width=10, anchor="w").pack(side="left")
+        tk.Entry(repo_frame, textvariable=repo_var, width=34).pack(side="left", fill="x", expand=True)
+        tk.Button(
+            repo_frame,
+            text="浏览",
+            command=lambda: self._browse_repository(repo_var),
+            bg="#243241",
+            fg="#f4f7fb",
+            relief="flat",
+        ).pack(side="left", padx=(6, 0))
         entry_row("AI 地址", base_url_var)
         entry_row("AI 模型", model_var)
         entry_row("API Key", api_key_var, show="*")
@@ -283,6 +298,11 @@ class CommitDiaryDesktopApp:
         tk.Button(button_row, text="取消", command=dialog.destroy, bg="#1f2933", fg="#f4f7fb", relief="flat").pack(
             side="right"
         )
+
+    def _browse_repository(self, target: tk.StringVar) -> None:
+        path = filedialog.askdirectory(title="选择 Git 仓库")
+        if path:
+            target.set(path)
 
     def show(self) -> None:
         self.root.deiconify()
