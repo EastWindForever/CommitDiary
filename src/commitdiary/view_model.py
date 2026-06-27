@@ -96,6 +96,7 @@ class CommitDiaryViewModel:
                 copy_text=copy_text,
             )
         )
+        self.is_expanded = True
 
     def update_window_position(self, x: int, y: int, width: int, height: int) -> None:
         self.settings = replace(
@@ -113,3 +114,6 @@ class CommitDiaryViewModel:
 
     def toggle_expanded(self) -> None:
         self.is_expanded = not self.is_expanded
+
+    def set_expanded(self, value: bool) -> None:
+        self.is_expanded = value

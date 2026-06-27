@@ -200,14 +200,7 @@ class CommitDiaryDesktopApp:
 
     def toggle_expanded(self) -> None:
         self.vm.toggle_expanded()
-        if self.vm.is_expanded:
-            self.detail_frame.pack(fill="both", expand=True)
-            self.collapse_button.config(text="▴")
-            self.root.geometry(f"520x560+{self.root.winfo_x()}+{self.root.winfo_y()}")
-        else:
-            self.detail_frame.pack_forget()
-            self.collapse_button.config(text="▾")
-            self.root.geometry(f"340x220+{self.root.winfo_x()}+{self.root.winfo_y()}")
+        self._sync_detail_visibility(resize=True)
         self._save_position()
 
     def select_repository(self) -> None:
@@ -325,7 +318,11 @@ class CommitDiaryDesktopApp:
 
     def _generate_diary(self) -> None:
         self.vm.generate()
-        self.root.after(0, self._refresh_labels)
+        self.root.after(0, self._show_generated_diary)
+
+    def _show_generated_diary(self) -> None:
+        self._refresh_labels()
+        self._sync_detail_visibility(resize=True)
 
     def _refresh_labels(self) -> None:
         self.title_label.config(text=f"{self.vm.repository_name} · {self.vm.branch_name}")
@@ -336,6 +333,19 @@ class CommitDiaryDesktopApp:
         self.status_label.config(text=self.vm.status_text)
         self.diary_text.delete("1.0", tk.END)
         self.diary_text.insert("1.0", self.vm.diary_markdown)
+        self._sync_detail_visibility(resize=False)
+
+    def _sync_detail_visibility(self, resize: bool) -> None:
+        if self.vm.is_expanded:
+            self.detail_frame.pack(fill="both", expand=True)
+            self.collapse_button.config(text="▴")
+            if resize:
+                self.root.geometry(f"520x560+{self.root.winfo_x()}+{self.root.winfo_y()}")
+        else:
+            self.detail_frame.pack_forget()
+            self.collapse_button.config(text="▾")
+            if resize:
+                self.root.geometry(f"340x220+{self.root.winfo_x()}+{self.root.winfo_y()}")
 
     def _run_background(self, target) -> None:
         thread = threading.Thread(target=target, daemon=True)

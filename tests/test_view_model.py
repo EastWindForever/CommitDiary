@@ -72,6 +72,7 @@ class CommitDiaryViewModelTests(unittest.TestCase):
         self.assertIn("今日完成", view_model.copy_text)
         self.assertEqual(1, len(history.entries))
         self.assertEqual("已生成本地日记", view_model.status_text)
+        self.assertTrue(view_model.is_expanded)
 
 
 def _snapshot():
